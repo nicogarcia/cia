@@ -76,6 +76,12 @@ actual_direction(Dir):-
 is_unconscious(Agent):-
   propert(Agent,unconscious,true).
 
+can_walk(Pos):-
+  land(Pos,plain).
+
+can_walk(Pos):-
+  land(Pos,mountain).
+
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
