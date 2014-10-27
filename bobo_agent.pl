@@ -9,7 +9,8 @@
 :- 	consult(ag_primitives),
 	consult(extras_for_agents),
 	consult(bobo_display),
-	consult(bobo_decisions).
+	consult(bobo_decisions),
+	consult(bobo_auxiliar).
 
 % Game loop
 run:-

@@ -3,29 +3,30 @@
 %	Contains the methods to check actions' preconditions
 %=============================================================
 
-decide_action(Action):-	
-	% Get agent position and direction
-    at([agent, me], Pos),
-    property([agent, me], dir, Dir),
+:- dynamic plan/1.
 
-	% Get the position in fron of me in my direction
-    ady_at_cardinal(Pos, Dir, PosInFront),
-    
-    % Get the terrain type of the position in front
-    land(PosInFront, Land),      
-      
-    (
-       Land = water
-           ;
-       Land = forest
-           ;
-       at([EntityType, EntityName], PosInFront),
-       is_a(EntityType, agent),
-       write('aaaahhhhh, no me ataques '), write(EntityName), write('!!!'),nl %si es un agente, y entonces lo esquiva!!!
-    ),
-    next_90_clockwise(Dir, DesiredDir),
-    Action = turn(DesiredDir),
-    show_action_taken(Action).
+decide_action(Action) :-
+  (
+    not(plan(_));
+    plan(Plan), Plan = []
+  ),
+  writeln('No hay ningun plan. Voy a crear uno.'),
+
+  Goals = [[6, 9]],
+  actual_position(Pos),
+  a_star(Pos, Goals, NewPlan, BestGoal, Cost),
+
+  writeln('El nuevo plan es: '), writeln(NewPlan),
+  NewPlan = [ Action | RemainingPlan],
+  update_plan(RemainingPlan), !.
+
+decide_action(Action) :-
+  plan(Plan), Plan \= [],
+  writeln('Continúo con mi plan.'),
+
+  Plan = [ Action | RemainingPlan],
+  write('Proxima acción: '), writeln(Action),
+  update_plan(RemainingPlan), !.
 
 % Object pickup action
 decide_action(pickup(Object)):-
@@ -48,6 +49,15 @@ decide_action(turn(Dir)):-
 decide_action(move_fwd):-
 	show_action_taken(move_fwd).
 
+update_plan(Plan) :-
+  retractall(plan(_)),
+  assert(plan(Plan)).
+
+there_is_no_plan(Plan) :-
+  (
+    not(plan(Plan));
+    plan(Plan), Plan = []
+  ).
 
 %-------------------------------------------------------------
 %	Actions' preconditions
@@ -81,6 +91,8 @@ can_walk(Pos):-
 
 can_walk(Pos):-
   land(Pos,mountain).
+
+
 
 
 
