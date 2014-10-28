@@ -21,7 +21,7 @@ run:-
     update_state(Perc),
     
 	% Display agent internal state
-    display_agent_status(Perc), 
+    display_agent_status(Perc),
     	
 	% Display current state
 	display_fixed_entities,
