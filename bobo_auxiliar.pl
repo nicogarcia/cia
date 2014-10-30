@@ -195,10 +195,10 @@ find_goals(Goals):-
 	%SortedHostels = [[DistNext,_,PosNext]|_],
 	SortedHostels = [[_,_,PosNext]|_],
 	% If my stamina is low enough to go to hostel add it to goals
-	%actual_stamina(Stamina),
+	actual_stamina(Stamina),
 	% If the level of stamina is low
-	%margin(Margin),
-	%DistNext >= Stamina - Margin,
+	margin(Margin),
+	DistNext >= Stamina - Margin,
 	writeln('I need a Hostel!'),
 	Goals = [PosNext],
 	retractall(need_stamina),
