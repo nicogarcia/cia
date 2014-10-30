@@ -70,9 +70,29 @@ show_entity(Entity, Pos, Turn):-
 display_fixed_entities :-
 	print_separator,
 	writeln('Fixed location entities: '),
-	forall(hostel(Entity, Pos), (write(' '), write(Entity), write(', '), writeln(Pos))),
-	forall(grave(Entity, Pos), (write(' '), write(Entity), write(', '), writeln(Pos))).
+	forall(hostel(Entity, Pos), (write('Hostel: '), write(Entity), write(', '), writeln(Pos))),
+	forall(grave(Entity, Pos), (write('Grave: '), write(Entity), write(', '), writeln(Pos))).
 	
+display_goals(Goals):-
+	write('Goals: '),
+	forall(member(Goal, Goals), (write(Goal), write(' '))),
+	nl.
+	
+
+print_frontier(Frontier) :-
+	writeln('Frontier: '),
+	forall(
+		member([Cost, Pos, Parent, Dir], Frontier),
+		(
+			write('\tCost: '), write(Cost), write(' Pos: '), writeln(Pos)
+		)
+	).
+
+print_neighbour(AdjPosition, Cardinal):-
+	(
+		print_neighbour_enabled(true) ->
+		(write('\t'), write(AdjPosition), write(' at '), write(Cardinal))
+	).
 	
 %==========================================================
 %              Screen Information Display

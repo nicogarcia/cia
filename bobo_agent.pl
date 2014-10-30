@@ -12,6 +12,15 @@
 	consult(bobo_decisions),
 	consult(bobo_auxiliar).
 
+% Configuration
+mapWidth(25).
+mapHeight(30).
+margin(10).
+
+print_frontier_enabled(false).
+print_neighbour_enabled(false).
+
+
 % Game loop
 run:-
 	% Get perceptions
@@ -97,8 +106,8 @@ analyse_perception([Perception|ReminderPerc]):-
 	show_message(hostel_found),
 	
 	% Update hostel location fact
-	retractall(hostel([hostel,Name],Pos)),
-	assert(hostel([hostel,Name],Pos)),
+	retractall(hostel(Name,Pos)),
+	assert(hostel(Name,Pos)),
 	
 	% Update hostel location belief
 	retractall(Perception),
@@ -114,8 +123,8 @@ analyse_perception([Perception|ReminderPerc]):-
 	show_message(grave_found),
 	
 	% Update grave location fact
-	retractall(grave([grave,Name],Pos)),
-	assert(grave([grave,Name],Pos)),
+	retractall(grave(Name,Pos)),
+	assert(grave(Name,Pos)),
 	
 	% Update grave location belief
 	retractall(Perception),
@@ -196,33 +205,13 @@ analyse_perception([Perception|ReminderPerc]):-
 	% Call recursively with the tail of the list
 	analyse_perception(ReminderPerc).
 
-
 analyse_perception([Perception|ReminderPerc]):-
-	Perception = land(Pos,water),
+	Perception = land(Pos,_),
 	
-	% Not seen befor
-	not(land(Pos,water)),
-	assert(land(Pos,water)),
-	
-	% Call recursively with the tail of the list
-	analyse_perception(ReminderPerc).
-
-analyse_perception([Perception|ReminderPerc]):-
-	Perception = land(Pos,forest),
-	
-	% Not seen befor
-	not(land(Pos,forest)),
-	assert(land(Pos,forest)),
-	
-	% Call recursively with the tail of the list
-	analyse_perception(ReminderPerc).
-
-analyse_perception([Perception|ReminderPerc]):-
-	Perception = land(Pos,mountain),
-	
-	% Not seen befor
-	not(land(Pos,mountain)),
-	assert(land(Pos,mountain)),
+	% Not seen before
+	not(land(Pos,_)),
+	assert(land(Pos,_)),
+	explore(Pos),
 	
 	% Call recursively with the tail of the list
 	analyse_perception(ReminderPerc).
@@ -245,6 +234,8 @@ start_ag:-
 	Number is random(1000),
 	atom_number(Atom, Number), 
 	atom_concat(bobo, Atom, AgName),
+	
+	generate_unexplored,
 
 	AgID = [agent, AgName],
    	register_me(AgID, Status),

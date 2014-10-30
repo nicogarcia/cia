@@ -3,61 +3,73 @@
 %	Contains the methods to check actions' preconditions
 %=============================================================
 
-:- dynamic plan/1.
-
-decide_action(Action) :-
-  (
-    not(plan(_));
-    plan(Plan), Plan = []
-  ),
-  writeln('No hay ningun plan. Voy a crear uno.'),
-
-  Goals = [[6, 9]],
-  actual_position(Pos),
-  a_star(Pos, Goals, NewPlan, BestGoal, Cost),
-
-  writeln('El nuevo plan es: '), writeln(NewPlan),
-  NewPlan = [ Action | RemainingPlan],
-  update_plan(RemainingPlan), !.
-
-decide_action(Action) :-
-  plan(Plan), Plan \= [],
-  writeln('Continúo con mi plan.'),
-
-  Plan = [ Action | RemainingPlan],
-  write('Proxima acción: '), writeln(Action),
-  update_plan(RemainingPlan), !.
+:- dynamic plan/1,unexplored/1,goals/1.
 
 % Object pickup action
 decide_action(pickup(Object)):-
-	% Check preconditions for the current action
-    preconditions_pickup(Object),
-    
+	%Check preconditions for the current action
+	preconditions_pickup(Object),
+	    
 	show_action_taken(pickup(Object)),
-	
+		
 	% Delete entity from location data
-    retractall(seen_entity(Object,_,_)),
-    retractall(at(Object,_)).
+	retractall(seen_entity(Object,_,_)),
+	retractall(at(Object,_)).
+	
+decide_action(Action) :-
+	print_separator,
+	writeln('Plan analysis:'),
+	fail.
 
-decide_action(turn(Dir)):-
-	Random is random(20),
-	0 is mod(Random, 5),
-	Random2 is Random / 5,
-	nth0(Random2, [n, w, e, s], Dir).	
+decide_action(Action) :-
+	  plan(Plan), Plan \= [],
+	  
+	  write('I have a plan. '),
+	
+	  Plan = [ Action | RemainingPlan],
+	    
+	  (
+	  	preconditions(Action) ->
+	  	(
+	  		writeln('I follow my plan.'),
+	  		write('Next action: '), writeln(Action),
+	  		write('Remaining Plan: '), writeln(RemainingPlan),
+		  	update_plan(RemainingPlan)
+	  	);
+	  	(
+	  		write('Action: '), write(Action), write(' can\'t be performed. '), writeln('I abort my plan.'),
+	  		retractall(plan(_)),
+	  		fail
+	  	)
+	  ),
+	  !.
 
-% Move forward decision
-decide_action(move_fwd):-
-	show_action_taken(move_fwd).
+
+decide_action(Action) :-
+	(
+		not(plan(_));
+		plan(Plan), Plan = []
+	),
+	writeln('I don\'t have plan. I will create it.'),
+	
+	find_goals(Goals),
+	display_goals(Goals),
+	actual_position(Pos),
+	a_star(Pos, Goals, NewPlan, BestGoal, Cost),
+	
+	write('New Goal: '), write(BestGoal), write('. Cost: '), write(Cost), 
+	write('. The new plan is: '), writeln(NewPlan),
+	NewPlan = [ Action | RemainingPlan],
+	write('Test1'),
+	update_plan(RemainingPlan),
+	write('Test2'),
+	!.
+	
+decide_action(move_fwd).
 
 update_plan(Plan) :-
   retractall(plan(_)),
   assert(plan(Plan)).
-
-there_is_no_plan(Plan) :-
-  (
-    not(plan(Plan));
-    plan(Plan), Plan = []
-  ).
 
 %-------------------------------------------------------------
 %	Actions' preconditions
@@ -91,6 +103,9 @@ can_walk(Pos):-
 
 can_walk(Pos):-
   land(Pos,mountain).
+  
+actual_stamina(Stamina):-
+	property([agent,me],stamina, Stamina).
 
 
 
@@ -109,7 +124,7 @@ preconditions(move_fwd):-
   can_walk(Next_pos),
   !.
 
-preconditions(turn).
+preconditions(turn(_)).
 	
 preconditions(pickup(Object)):-
   actual_position(Pos),
@@ -149,3 +164,14 @@ preconditions(cast_spell(sleep(Agent))):-
   at(Agent,Pos),
   not(is_unconscious(Agent)),
   !.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Auxiliars
+%
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+explore(Pos):-
+ 	retractall(unexplored(Pos)).
+ 	
+ 	

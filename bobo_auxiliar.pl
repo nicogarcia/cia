@@ -4,31 +4,68 @@
 a_star(Pos, Goals, Plan, BestGoal, Cost) :-
 	actual_direction(Cardinal),
 	map_dir_to_cardinal(Dir, Cardinal),
-	build_frontier(Pos, Goals, Dir, [Pos],[], Frontier),
-	print_frontier(Frontier),
-	a_star_aux(Pos, Dir, Goals, [], Frontier, Plan, BestGoal, Cost).
-%---------------------------------------------------------------
-a_star_aux(Pos, Dir, Goals, Visited, Frontier, Plan, BestGoal, Cost) :-
-	member(Pos, Goals),
-	Cost is 0,
-	BestGoal = Pos,
-	Plan = [].
 
-a_star_aux(Pos, Dir, Goals, Visited, Frontier, Plan, BestGoal, Cost) :-
+	a_star_aux(Dir, Goals, [], [ [0, Pos, [], Dir] ], Plan, BestGoal, Cost, _).
+%---------------------------------------------------------------
+a_star_aux(Dir, Goals, Visited, Frontier, Plan, OutPos, Cost, [OutPos, OutParent]) :-
+	Frontier = [ Node | RestFrontier ],
+	Node = [ Cost, OutPos, OutParent, NewDir],
+	member(OutPos, Goals),
+	Plan = [],
+	writeln('I virtually reached the goal'),
+	!.
+
+a_star_aux(Dir, Goals, Visited, Frontier, Plan, BestGoal, Cost, [OutPos, OutParent]) :-
 	% Select new node
-	Frontier = [[NextCost, NextPos] | RestFrontier],
-	% visit the node
-	NewVisited = [Pos | Visited],
-	get_direction(NextPos, Pos, NewDir),
+	Frontier = [ Node | RestFrontier],
+	Node = [MyCost, Pos, Parent, ParentDir],
+	
+	( Parent \= [] -> get_direction(Pos, Parent, NewDir); NewDir = Dir ),
+	
+	% Visit the node
+	NewVisited = [Pos | Visited],	
+	
 	% Add the Neighbours to the Frontier
-	build_frontier(NextPos, Goals, NewDir, NewVisited,RestFrontier, NewFrontier),
-	print_frontier(NewFrontier),
+	build_frontier(Pos, MyCost, Goals, NewDir, NewVisited, RestFrontier, NewFrontier),
+	%print_frontier(NewFrontier),
+	
 	% Keep going
-	a_star_aux(NextPos, NewDir, Goals, NewVisited, NewFrontier, NewPlan, BestGoal, NewCost),
-	% 
-	new_plan(Dir, NewDir, NewPlan, Plan),
-	cost(Pos, NextPos, Dir, AddedCost),
-	Cost is AddedCost + NewCost.
+	a_star_aux(NewDir, Goals, NewVisited, NewFrontier, NewPlan, BestGoal, NewCost, [NewOutPos, NewOutParent]),
+	
+	( 
+		Pos = NewOutParent -> 
+		(	
+			get_direction(NewOutPos, NewOutParent, OutDir),
+			OutPos = Pos, OutParent = Parent,
+			
+			new_plan(ParentDir, OutDir, NewPlan, Plan),
+			
+			cost(Pos, NewOutPos, NewDir, AddedCost),
+			Cost is AddedCost + NewCost
+		);
+		(
+			OutPos = NewOutPos, OutParent = NewOutParent,
+			Plan = NewPlan,	Cost = NewCost
+		)
+	).
+	
+%---------------------------------------------------------------
+build_frontier(Pos, MyCost, Goals, Dir, Visited,OldFrontier ,NewFrontier) :-
+	possible_directions(Pos, Directions),
+	
+	findall(
+		[Cost, NeighbourPos, Pos, Direction],
+		(
+			member([Direction, NeighbourPos], Directions),
+			not(member(NeighbourPos, Visited)),
+			a_star_function(Pos, NeighbourPos, Dir, Goals, LocalCost),
+			Cost is LocalCost + MyCost
+		),
+		FrontierUnsorted
+	),
+
+	append(OldFrontier,FrontierUnsorted,Frontier),
+	sort(Frontier, NewFrontier).
 
 %---------------------------------------------------------------
 
@@ -54,24 +91,6 @@ a_star_function(Pos, Pos2, Dir, Goals, Result) :-
 		FunctionResults
 	),
 	sort(FunctionResults, [Result | _]).
-	
-%---------------------------------------------------------------
-build_frontier(Pos, Goals, Dir, Visited,OldFrontier ,NewFrontier) :-
-	write('Posicion actual: '), writeln(Pos),
-	possible_directions(Pos, Directions),
-	% print_possible_directions(Directions),
-	findall(
-		[Cost, NeighbourPos],
-		(
-			member([Direction, NeighbourPos], Directions),
-			not(member(NeighbourPos, Visited)),
-			a_star_function(Pos, NeighbourPos, Dir, Goals, Cost)
-		),
-		FrontierUnsorted
-	),
-
-	append(OldFrontier,FrontierUnsorted,Frontier),
-	sort(Frontier, NewFrontier).
 
 %---------------------------------------------------------------
 possible_directions(Pos, PossibleDirs) :-
@@ -82,14 +101,21 @@ possible_directions(Pos, PossibleDirs) :-
 		(
 			member(Dir, Directions),
 			get_position_in_direction(Pos, Dir, AdjPosition),
-			can_walk(AdjPosition),
-			map_dir_to_cardinal(Dir, Cardinal),
-			write('\t'), write(AdjPosition), write(' at '), write(Cardinal)
+			contained_in_map(AdjPosition),
+			map_dir_to_cardinal(Dir, Cardinal)
+			%print_neighbour(AdjPosition, Cardinal)
 		),
 		PossibleDirs
-	), nl.
+	).
 
 %---------------------------------------------------------------
+contained_in_map([X | [Y]]) :-
+	mapWidth(W),
+	mapHeight(H),
+	X > 0, X =< W,	
+	Y > 0, Y =< H.
+%---------------------------------------------------------------
+
 map_dir_to_cardinal(Dir, Cardinal):-
 	Dir = [-1, 0], Cardinal = n.
 
@@ -111,6 +137,11 @@ land_cost(Pos,Land_cost):-
 	land(Pos,mountain),
 	Land_cost = 2.
 
+land_cost(Pos,Land_cost):-
+	not(land(Pos, forest)),
+	not(land(Pos, water)),
+	Land_cost = 5.
+	
 %---------------------------------------------------------------
 manhattan_distance([X1 | [Y1]], [X2 | [Y2]], Dist) :-
 	DifX is X1 - X2,
@@ -140,23 +171,56 @@ cost(Pos1, Pos2, Dir, Result) :-
 	land_cost(Pos2, Land_cost),
 	Result is Land_cost + 1.
 
-% UNUSED
-print_possible_directions(Directions) :-
-	write('Possible directions are: '),
-	forall(
-		member([Dir, _], Directions),
-		(
-			map_dir_to_cardinal(Dir, Cardinal),
-			write(Cardinal), write(',')
-		)
-	),
-	nl.
+	
+%---------------------------------------------------------------
 
-print_frontier(Frontier) :-
-	writeln('Frontier: '),
-	forall(
-		member([Cost, Pos], Frontier),
+% Search a Hostel if needed	
+%---------------------------------------------------------------
+findGoals(Goals):-
+	% If there are known hostels
+	hostel(_,_),
+	
+	% Find Manhattan distance to every one and sort them
+	actual_position(MyPos),
+	findall(
+		[Dist,Name,Pos],
 		(
-			write('\tCost: '), write(Cost), write(' Pos: '), writeln(Pos)
-		)
+			hostel(Name,Pos),
+			manhattan(MyPos,Pos,Dist)
+		),
+		Hostels		
+	),
+	sort(Hostels,SortedHostels),
+	
+	% If my stamina is low enough to go to hostel add it to goals
+	actual_stamina(Stamina),
+	SortedHostels = [[DistNext,_,PosNext]|_],
+	margin(Margen),
+	DistNext >= Stamina - Margin,
+	Goals = [PosNext],
+	!.
+	
+	
+% Explore map
+find_goals(Goals):-
+	findall(
+		Pos,
+		unexplored(Pos),
+		Goals	
 	).
+
+%---------------------------------------------------------------
+
+%---------------------------------------------------------------
+generate_unexplored:-
+	mapWidth(W),
+	mapHeight(H),	
+	forall(
+		(between(0,W, X),between(0,H,Y)),
+		assert(unexplored([X,Y]))
+	).
+
+%---------------------------------------------------------------
+
+
+
