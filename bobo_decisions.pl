@@ -21,6 +21,19 @@ decide_action(Action) :-
 	writeln('Plan analysis:'),
 	fail.
 
+decide_action(Action):-
+	need_stamina(),
+	find_goals(Goals),
+	display_goals(Goals),
+	actual_position(Pos),
+	a_star(Pos, Goals, NewPlan, BestGoal, Cost),
+	
+	write('New Goal: '), write(BestGoal), write('. Cost: '), write(Cost), 
+	write('. The new plan is: '), writeln(NewPlan),
+	NewPlan = [ Action | RemainingPlan],
+	update_plan(RemainingPlan),
+	!.
+
 decide_action(Action) :-
 	  plan(Plan), Plan \= [],
 	  
@@ -173,5 +186,9 @@ preconditions(cast_spell(sleep(Agent))):-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 explore(Pos):-
  	retractall(unexplored(Pos)).
- 	
+ 
+ need_stamina():-
+ 	actual_stamina(Stamina),
+ 	150 > Stamina,
+ 	assert(need_stamina).
  	

@@ -6,6 +6,8 @@
 
 :- dynamic turn/1, seen_entity/3, hostel/2, grave/2.
 
+:- dynamic need_stamina/0.
+
 :- 	consult(ag_primitives),
 	consult(extras_for_agents),
 	consult(bobo_display),
@@ -15,7 +17,7 @@
 % Configuration
 mapWidth(25).
 mapHeight(30).
-margin(10).
+margin(20).
 
 print_frontier_enabled(false).
 print_neighbour_enabled(false).

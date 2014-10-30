@@ -176,30 +176,53 @@ cost(Pos1, Pos2, Dir, Result) :-
 
 % Search a Hostel if needed	
 %---------------------------------------------------------------
-findGoals(Goals):-
+find_goals(Goals):-
+	need_stamina,
+	writeln('I need stamina?'),
 	% If there are known hostels
-	hostel(_,_),
-	
+	hostel(_,_),	
 	% Find Manhattan distance to every one and sort them
 	actual_position(MyPos),
 	findall(
 		[Dist,Name,Pos],
 		(
 			hostel(Name,Pos),
-			manhattan(MyPos,Pos,Dist)
+			manhattan_distance(MyPos,Pos,Dist)
 		),
 		Hostels		
 	),
-	sort(Hostels,SortedHostels),
-	
+	sort(Hostels,SortedHostels),	
+	%SortedHostels = [[DistNext,_,PosNext]|_],
+	SortedHostels = [[_,_,PosNext]|_],
 	% If my stamina is low enough to go to hostel add it to goals
-	actual_stamina(Stamina),
-	SortedHostels = [[DistNext,_,PosNext]|_],
-	margin(Margen),
-	DistNext >= Stamina - Margin,
+	%actual_stamina(Stamina),
+	% If the level of stamina is low
+	%margin(Margin),
+	%DistNext >= Stamina - Margin,
+	writeln('I need a Hostel!'),
 	Goals = [PosNext],
+	retractall(need_stamina),
 	!.
 	
+% Search for objets to pickup
+find_goals(Goals):-
+	writeln('Search for objets'),
+	pickable_object(Entity),
+	findall(
+		Pos,
+		(
+			at(Object, Pos),
+			pickable_object(Object)
+		),
+		Objects
+	),
+	(Objects = [] ->
+		(writeln('No objects'),fail);
+		(Goals = Objects)
+	),
+	!.
+
+
 	
 % Explore map
 find_goals(Goals):-
@@ -221,6 +244,10 @@ generate_unexplored:-
 	).
 
 %---------------------------------------------------------------
-
-
-
+%Return if an Entity can be pickup
+pickable_object(Entity):-
+	(
+		Entity = [treasure, _];
+		Entity = [sleep_potion,_];
+		Entity = [opening_potion,_]
+	).
