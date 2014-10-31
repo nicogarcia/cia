@@ -5,14 +5,15 @@ a_star(Pos, Goals, Plan, BestGoal, Cost) :-
 	actual_direction(Cardinal),
 	map_dir_to_cardinal(Dir, Cardinal),
 
-	a_star_aux(Dir, Goals, [], [ [0, Pos, [], Dir] ], Plan, BestGoal, Cost, _).
+	a_star_aux(Dir, Goals, [], [ [0, Pos, [], Dir] ], Plan, BestGoal, Cost, _),
+	!.
 %---------------------------------------------------------------
 a_star_aux(Dir, Goals, Visited, Frontier, Plan, OutPos, Cost, [OutPos, OutParent]) :-
 	Frontier = [ Node | RestFrontier ],
 	Node = [ Cost, OutPos, OutParent, NewDir],
 	member(OutPos, Goals),
 	Plan = [],
-	writeln('I virtually reached the goal'),
+	format('I virtually reached the goal ~w.', [OutPos]),
 	!.
 
 a_star_aux(Dir, Goals, Visited, Frontier, Plan, BestGoal, Cost, [OutPos, OutParent]) :-
@@ -47,7 +48,7 @@ a_star_aux(Dir, Goals, Visited, Frontier, Plan, BestGoal, Cost, [OutPos, OutPare
 			OutPos = NewOutPos, OutParent = NewOutParent,
 			Plan = NewPlan,	Cost = NewCost
 		)
-	).
+	), !.
 	
 %---------------------------------------------------------------
 build_frontier(Pos, MyCost, Goals, Dir, Visited,OldFrontier ,NewFrontier) :-
@@ -65,7 +66,8 @@ build_frontier(Pos, MyCost, Goals, Dir, Visited,OldFrontier ,NewFrontier) :-
 	),
 
 	append(OldFrontier,FrontierUnsorted,Frontier),
-	sort(Frontier, NewFrontier).
+	sort(Frontier, NewFrontier),
+	!.
 
 %---------------------------------------------------------------
 
@@ -174,66 +176,6 @@ cost(Pos1, Pos2, Dir, Result) :-
 	
 %---------------------------------------------------------------
 
-% Search a Hostel if needed	
-%---------------------------------------------------------------
-find_goals(Goals):-
-	need_stamina,
-	writeln('I need stamina?'),
-	% If there are known hostels
-	hostel(_,_),	
-	% Find Manhattan distance to every one and sort them
-	actual_position(MyPos),
-	findall(
-		[Dist,Name,Pos],
-		(
-			hostel(Name,Pos),
-			manhattan_distance(MyPos,Pos,Dist)
-		),
-		Hostels		
-	),
-	sort(Hostels,SortedHostels),	
-	%SortedHostels = [[DistNext,_,PosNext]|_],
-	SortedHostels = [[_,_,PosNext]|_],
-	% If my stamina is low enough to go to hostel add it to goals
-	actual_stamina(Stamina),
-	% If the level of stamina is low
-	margin(Margin),
-	DistNext >= Stamina - Margin,
-	writeln('I need a Hostel!'),
-	Goals = [PosNext],
-	retractall(need_stamina),
-	!.
-	
-% Search for objets to pickup
-find_goals(Goals):-
-	writeln('Search for objets'),
-	pickable_object(Entity),
-	findall(
-		Pos,
-		(
-			at(Object, Pos),
-			pickable_object(Object)
-		),
-		Objects
-	),
-	(Objects = [] ->
-		(writeln('No objects'),fail);
-		(Goals = Objects)
-	),
-	!.
-
-
-	
-% Explore map
-find_goals(Goals):-
-	findall(
-		Pos,
-		unexplored(Pos),
-		Goals	
-	).
-
-%---------------------------------------------------------------
-
 %---------------------------------------------------------------
 generate_unexplored:-
 	mapWidth(W),
@@ -251,3 +193,290 @@ pickable_object(Entity):-
 		Entity = [sleep_potion,_];
 		Entity = [opening_potion,_]
 	).
+
+
+object_or_grave(Entity):-
+	Entity = [grave,_],
+	has(Entity,_).
+	
+
+object_or_grave(Entity):-
+	pickable_object(Entity).
+
+%---------------------------------------------------------------
+% Auxiliaries functions to decide Action do
+%
+%---------------------------------------------------------------
+
+% Pick up an object if it's in the same position
+inmediate_action(pickup(Object)):-
+	%Check preconditions for the current action
+	preconditions(pickup(Object)),
+	show_action_taken(pickup(Object)),		
+	% Delete entity from location data
+	retractall(seen_entity(Object,_,_)),
+	retractall(at(Object,_)),
+	!.
+
+inmediate_action(take_from(Object,Grave)):-
+	preconditions(take_from(Object,Grave)),
+	show_action_taken(take_from(Object,Grave)),
+	% Delete entity from the records
+	retractall(seen_entity(Object,_,_)),
+	retractall(has(Entity,Object)),
+	!.
+
+inmediate_action(cast_spell(sleep(Agent))):-
+	preconditions(cast_spell(sleep(Agent))),
+	show_action_taken(cast_spell(sleep(Agent))),
+	!.
+
+
+inmediate_action(cast_spell(open(Grave))):-
+	preconditions(cast_spell(open(Grave))),
+	show_action_taken(cast_spell(open(Grave))),
+	!.
+
+charge_stamina(null_action):-
+	actual_position(Pos),
+	hostel(Name,Pos),
+	not_forbbiden_entry(Name),
+	actual_stamina(Stamina),
+	actual_max_stamina(MaxStamina),
+	Stamina < MaxStamina.
+
+
+/*
+need_stamina(Cost,GoalPos,HostelPos):-
+	writeln('I need stamina?'),
+	not(im_going_to_hostel),	
+	hostel(_,_),
+	% If there are known hostels
+	writeln('Before findall'),
+	findall(
+		[Dist,Name,Pos],
+		(
+			hostel(Name,Pos),
+			manhattan_distance(GoalPos,Pos,Dist)
+		),
+		Hostels		
+	),
+	writeln('Finish the findall'),
+	sort(Hostels,SortedHostels),	
+	SortedHostels = [[DistNext,_,HostelPos]|_],
+	writeln('sort'),
+	% If my stamina is low enough to go to hostel add it to goals
+	actual_stamina(Stamina),
+	% If the level of stamina is low
+	margin(Margin),
+	AproximateTotalCost is Cost + DistNext,
+	AproximateTotalCost >= Stamina - Margin,
+	writeln('I need a Hostel!'),
+	writeln('Before assert'),
+	assert(im_going_to_hostel),
+	writeln('After assert'),
+	!.*/
+search_objects_and_graves(Action):-
+	(
+		not(plan(_));
+		plan(Plan), Plan = []
+	),
+	i_have_opening_potion,
+	writeln('I don\'t have plan. I will create a plan to find objects and graves.'),
+	find_objects_graves(Goals),
+	display_goals(Goals),
+	actual_position(Pos),
+	a_star(Pos, Goals, GoalPlan, BestGoal, Cost),
+	format('(graves) goal plan: ~w, best goal: ~w, cost: ~w~n', [GoalPlan, BestGoal, Cost]),
+	(
+	 need_go_to_hostel(BestGoal,Cost,HostelPlan,BestHostelGoal,HostelCost) ->
+		(
+			NewPlan = HostelPlan,			
+			writeln('I need to go to a Hostel'),
+			write('I go to Hostel: '),write(BestHostelGoal),write('. Cost'), writeln(HostelCost),
+			write('The new Plan is: '), writeln(HostelPlan)
+		);
+		(	
+			NewPlan = GoalPlan,
+			writeln('Hostel not need!.'),
+			write('New Goal: '), write(BestGoal), write('. Cost: '), write(Cost), 
+			write('. The new plan is: '), writeln(NewPlan)
+		)
+	),
+	NewPlan = [ Action | RemainingPlan],
+	update_plan(RemainingPlan),
+	!.
+
+
+search_object(Action):-
+	(
+		not(plan(_));
+		plan(Plan), Plan = []
+	),
+	writeln('I don\'t have plan. I will create a plan to find Objects.'),
+	
+	find_objects(Goals),
+	display_goals(Goals),
+	actual_position(Pos),
+	a_star(Pos, Goals, GoalPlan, BestGoal, Cost),
+	format('(objects) goal plan: ~w, best goal: ~w, cost: ~w~n', [GoalPlan, BestGoal, Cost]),
+	
+	(
+	 need_go_to_hostel(BestGoal,Cost,HostelPlan,BestHostelGoal,HostelCost) ->
+		(
+			NewPlan = HostelPlan,			
+			writeln('I need to go to a Hostel'),
+			write('I go to Hostel: '),write(BestHostelGoal),write('. Cost'), writeln(HostelCost),
+			write('The new Plan is: '), writeln(HostelPlan)
+		);
+		(	
+			NewPlan = GoalPlan,
+			writeln('Hostel not need!.'),
+			write('New Goal: '), write(BestGoal), write('. Cost: '), write(Cost), 
+			write('. The new plan is: '), writeln(NewPlan)
+		)
+	),
+	NewPlan = [ Action | RemainingPlan],
+	update_plan(RemainingPlan),
+	!.
+
+
+
+
+explore(Action):-
+	(
+		not(plan(_));
+		plan(Plan), Plan = []
+	),
+	writeln('I don\'t have plan. I will create a plan to explore.'),
+	
+	find_unexplore_goals(Goals),
+	display_goals(Goals),
+	actual_position(Pos),
+	a_star(Pos, Goals, NewPlan, BestGoal, Cost),
+	
+	write('New Goal: '), write(BestGoal), write('. Cost: '), write(Cost), 
+	write('. The new plan is: '), writeln(NewPlan),
+	NewPlan = [ Action | RemainingPlan],
+	update_plan(RemainingPlan),
+	!.
+
+
+follow_plan(Action):-
+	plan(Plan), Plan \= [],
+	write('I have a plan. '),
+	
+	Plan = [ Action | RemainingPlan],
+	preconditions(Action),
+	writeln('I follow my plan.'),
+	write('Next action: '), writeln(Action),
+	write('Remaining Plan: '), writeln(RemainingPlan),
+	update_plan(RemainingPlan),
+	!.
+
+follow_plan(Action):-
+	plan(Plan), Plan \= [],
+	Plan = [ Action | _],
+	not(preconditions(Action)),
+	retractall(plan(_)),
+	!.
+/*
+follow_plan(Action):-
+	write('Action: '), write(Action), write(' can\'t be performed. '), writeln('I abort my plan.'),
+	retractall(plan(_)),
+	writeln('I don\'t have plan. I will create it.'),
+	
+	find_goals(Goals),
+	display_goals(Goals),
+	actual_position(Pos),
+	a_star(Pos, Goals, NewPlan, BestGoal, Cost),
+	
+	write('New Goal: '), write(BestGoal), write('. Cost: '), write(Cost), 
+	write('. The new plan is: '), writeln(NewPlan),
+	NewPlan = [ Action | RemainingPlan],
+	update_plan(RemainingPlan),
+	!.
+*/
+
+%---------------------------------------------------------------
+% Auxiliars functions
+%
+%---------------------------------------------------------------
+
+update_plan(Plan) :-
+  retractall(plan(_)),
+  assert(plan(Plan)).
+
+need_go_to_hostel(GoalPos,Cost,HostelPlan,BestHostelGoal,BestHostelCost):-
+	writeln('Check if i can go to the target an then to the hostel'),
+	hostel(_,_),
+	findall(
+		Pos,
+		(
+			hostel(Hostel,Pos),
+			not_forbbiden_entry(Hostel)
+
+		),
+		Hostels
+	),
+	write('Hostels: '),writeln(Hostels),
+	a_star(GoalPos,Hostels,_,BestHostel,HostelCost),
+	actual_position(ActualPos),
+	ActualPos \= BestHostel,
+	write('From goal '), write(GoalPos), write(' to hostel: '),writeln(BestHostel),
+	actual_stamina(Stamina),
+	margin(Margin),
+	TotalCost is HostelCost + Cost + Margin,
+	Stamina < TotalCost,
+	actual_position(ActualPos),
+	a_star(ActualPos,Hostels,HostelPlan,BestHostelGoal,BestHostelCost),
+	!.
+
+  % Search for objets to pickup
+find_objects(Goals):-
+	writeln('Search for objets'),
+	findall(
+		Pos,
+		(
+			at(Object, Pos),
+			pickable_object(Object)
+		),
+		Objects
+	),
+	(Objects = [] ->
+		(writeln('No objects'),fail);
+		(Goals = Objects)
+	),
+	!.
+
+find_objects_graves(Goals):-
+	writeln('Search for objects and graves'),
+	findall(
+		Pos,
+		(
+			at(Entity, Pos),
+			object_or_grave(Entity)
+			
+		),
+		Entities
+	),
+	(Entities = [] ->
+		(writeln('No objects or graves'),fail);
+		(Goals = Entities)
+	),
+	!.
+
+% Explore map
+find_unexplore_goals(Goals):-
+	findall(
+		Pos,
+		unexplored(Pos),
+		Goals	
+	).
+
+/*
+find_goals(Goals):-
+	find_objects
+
+*/
+	

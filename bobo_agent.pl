@@ -6,7 +6,7 @@
 
 :- dynamic turn/1, seen_entity/3, hostel/2, grave/2.
 
-:- dynamic need_stamina/0.
+:- dynamic im_going_to_hostel/0.
 
 :- 	consult(ag_primitives),
 	consult(extras_for_agents),
@@ -25,6 +25,8 @@ print_neighbour_enabled(false).
 
 % Game loop
 run:-
+	%remove all past fact about what i have
+	retract_my_own_perceptions,
 	% Get perceptions
     get_percept(Perc),
 
@@ -33,6 +35,9 @@ run:-
     
 	% Display agent internal state
     display_agent_status(Perc),
+
+    % To debug
+    display_agent_simulated_stamina,
     	
 	% Display current state
 	display_fixed_entities,
@@ -152,45 +157,41 @@ analyse_perception([Perception|ReminderPerc]):-
 	% Call recursively with the tail of the list
 	analyse_perception(ReminderPerc).
 	
-% Update state of an object being held by a dragon
+% Update state of an object being held by an Entity
 analyse_perception([Perception|ReminderPerc]):-
-	Perception = has([dragon,_],Entity),
-	
+	Perception = has(Entity,Entity2),
 	% It was seen in another place
-	at(Entity,_),
-	
-	show_dragon_got_an_entity(Entity),
+	at(Entity2,_),
 	
 	% Remove the fact that it was seen 
-	retractall(at(Entity,_)),
-	retractall(seen_entity(Entity,_,_)),
+	retractall(at(Entity2,_)),
+	retractall(seen_entity(Entity2,_,_)),
+	has(Entity3,Entity2),
+	Entity3 \= Entity,
+	% Remove the fact that its being held by another Entity
+	retractall(has(Entity3,Entity2)),
 	
-	% Remove the fact that its being held by another entity
-	retractall(has(_,Entity)),
-	
-	% Update the fact that the dragon has the Entity
+	% Update the fact that an Entity has the Entity2
 	assert(Perception), !,
 		
 	% Call recursively with the tail of the list
 	analyse_perception(ReminderPerc).
 
-
+% Update state of an object being held by another Entity
 analyse_perception([Perception|ReminderPerc]):-
-	Perception = has([dragon,Dragon],Entity),
+	Perception = has(Entity,Entity2),
 	
-	% It was seen in another place
-	has([dragon,Dragon2],Entity),
-	
-	show_dragon_got_an_entity(Entity),
+	% Other Entity has been the owner
+	has(Entity3,Entity2),
 	
 	% Remove the fact that it was seen 
-	retractall(has([dragon,Dragon2],Entity)),
-	retractall(seen_entity(Entity,_,_)),
+	retractall(has(Entity3,Entity2)),
+	retractall(seen_entity(Entity2,_,_)),
 	
 	% Remove the fact that its in another position
-	retractall(at(Entity,_)),
+	retractall(at(Entity2,_)),
 	
-	% Update the fact that the dragon has the Entity
+	% Update the fact that the Entity has the Entity2
 	assert(Perception), !,
 		
 	% Call recursively with the tail of the list
@@ -213,11 +214,11 @@ analyse_perception([Perception|ReminderPerc]):-
 	% Not seen before
 	not(land(Pos,_)),
 	assert(land(Pos,_)),
-	explore(Pos),
+	explore_cell(Pos),
 	
 	% Call recursively with the tail of the list
 	analyse_perception(ReminderPerc).
-	
+
 analyse_perception([Perception|ReminderPerc]):-
 	% Update old facts with newer for the remaining entities
 	retractall(Perception),
@@ -225,6 +226,12 @@ analyse_perception([Perception|ReminderPerc]):-
 	
 	% Call recursively with the tail of the list
 	analyse_perception(ReminderPerc).
+% -----------------------------------------------------------------
+% Remove all belief i have about me
+retract_my_own_perceptions:-
+	retractall(has([agent,me],_)),
+	retractall(entity_descr([agent,me], _)).
+	
 
 % -----------------------------------------------------------------
 
@@ -263,3 +270,10 @@ start_ag_instance(InstanceID):-
     run.
 
 si(InstanceID):- start_ag_instance(InstanceID).
+
+
+% To debug
+display_agent_simulated_stamina:-
+	write('Simulated Stamina: '), 
+	actual_stamina(Stamina),
+	writeln(Stamina).

@@ -1,3 +1,4 @@
+
 %=============================================================
 %	Decision module
 %	Contains the methods to check actions' preconditions
@@ -6,82 +7,39 @@
 :- dynamic plan/1,unexplored/1,goals/1.
 
 % Object pickup action
-decide_action(pickup(Object)):-
-	%Check preconditions for the current action
-	preconditions_pickup(Object),
-	    
-	show_action_taken(pickup(Object)),
-		
-	% Delete entity from location data
-	retractall(seen_entity(Object,_,_)),
-	retractall(at(Object,_)).
-	
-decide_action(Action) :-
-	print_separator,
-	writeln('Plan analysis:'),
-	fail.
+decide_action(Action):-
+	inmediate_action(Action),
+	writeln('inmediate_action'),
+	!.
+
+decide_action(Action):-
+  charge_stamina(Action),
+  !.
+
+decide_action(Action):-
+		follow_plan(Action),
+		writeln('folow_plan'),
+		!.
+decide_action(Action):-
+	search_objects_and_graves(Action),
+	writeln('Search objects and graves'),
+	!.
 
 decide_action(Action) :-
-	  plan(Plan), Plan \= [],
-	  
-	  write('I have a plan. '),
-	
-	  Plan = [ Action | RemainingPlan],
-	    
-	  (
-	  	preconditions(Action) ->
-	  	(
-	  		writeln('I follow my plan.'),
-	  		write('Next action: '), writeln(Action),
-	  		write('Remaining Plan: '), writeln(RemainingPlan),
-		  	update_plan(RemainingPlan)
-	  	);
-	  	(
-	  		write('Action: '), write(Action), write(' can\'t be performed. '), writeln('I abort my plan.'),
-	  		retractall(plan(_)),
-	  		fail
-	  	)
-	  ),
+	  search_object(Action),
+	  writeln('search_object'),
 	  !.
 
+decide_action(Action):-
+		explore(Action),
+		writeln('explore'),
+		!.
 
-decide_action(Action) :-
-	(
-		not(plan(_));
-		plan(Plan), Plan = []
-	),
-	writeln('I don\'t have plan. I will create it.'),
-	
-	find_goals(Goals),
-	display_goals(Goals),
-	actual_position(Pos),
-	a_star(Pos, Goals, NewPlan, BestGoal, Cost),
-	
-	write('New Goal: '), write(BestGoal), write('. Cost: '), write(Cost), 
-	write('. The new plan is: '), writeln(NewPlan),
-	NewPlan = [ Action | RemainingPlan],
-	write('Test1'),
-	update_plan(RemainingPlan),
-	write('Test2'),
-	!.
-	
+decide_action(Action):-
+  need_stamina(Action),
+  writeln('need_stamina').
+
 decide_action(move_fwd).
-
-update_plan(Plan) :-
-  retractall(plan(_)),
-  assert(plan(Plan)).
-
-%-------------------------------------------------------------
-%	Actions' preconditions
-%-------------------------------------------------------------
-
-preconditions_pickup(Object):- 
-	Object = [Type, _],
-	% Define types that can be picked up
-	(Type = treasure; Type = sleep_potion; Type = opening_potion),
-	
-	% Check if agent is in the same position as the object
-	at([agent,me],Pos), at(Object,Pos).
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -96,7 +54,7 @@ actual_direction(Dir):-
   property([agent,me],dir,Dir).
 
 is_unconscious(Agent):-
-  propert(Agent,unconscious,true).
+  property(Agent,unconscious,true).
 
 can_walk(Pos):-
   land(Pos,plain).
@@ -105,9 +63,28 @@ can_walk(Pos):-
   land(Pos,mountain).
   
 actual_stamina(Stamina):-
-	property([agent,me],stamina, Stamina).
+	property([agent,me],stamina, Stamina1),
+  % To debug
+	Stamina is Stamina1.
 
+actual_max_stamina(MaxStamina):-
+  property([agent,me],maxstamina,MaxStamina1),
+  % To debug
+  MaxStamina is MaxStamina1.
 
+i_have_opening_potion:-
+	has([agent,me],[opening_potion,_]),
+  !.
+
+not_forbbiden_entry(Hostel):-
+  entity_descr([hostel,Hostel],[[forbidden_entry,ForbbidenList]]),
+  ag_name(AgInstanceName),
+  (
+    \+ member([[agent,AgInstanceName],_],ForbbidenList) ;
+      member([[agent,AgInstanceName],Turn],ForbbidenList),
+      turn(ActualTurn),
+      Turn < ActualTurn
+  ).
 
 
 
@@ -127,8 +104,11 @@ preconditions(move_fwd):-
 preconditions(turn(_)).
 	
 preconditions(pickup(Object)):-
-  actual_position(Pos),
-  at(Object,Pos),
+	Object = [Type, _],
+	% Define types that can be picked up
+	(Type = treasure; Type = sleep_potion; Type = opening_potion),	
+	% Check if agent is in the same position as the object
+	at([agent,me],Pos), at(Object,Pos),
   !.
 
 preconditions(drop(Object)):-
@@ -136,10 +116,20 @@ preconditions(drop(Object)):-
   !.
 
 preconditions(take_from(Object,Grave)):-
-  is_open(Grave),
-  has(Grave,Object),
+  writeln('checking precond'),
+  Grave = [grave,_],
   actual_position(Pos),
   at(Grave,Pos),
+  format('im in the same position as the grave ~w', [Grave]),
+  is_open(Grave),
+  writeln('grave open'),
+  format('object: ~w, grave: ~w', [Object, Grave]),
+  forall(
+    has(Grave, Obj),
+    writeln(Obj)
+  ),
+  has(Grave,Object),
+  writeln('grave has object i think'),
   !.
 
 preconditions(attack(Agent)):-
@@ -152,16 +142,20 @@ preconditions(attack(Agent)):-
   !.
 
 preconditions(cast_spell(open(Grave))):-
-  not(is_open(Grave)),
+  i_have_opening_potion,
   actual_position(Pos),
+  Grave = [grave,_],
   at(Grave,Pos),
-  has([agent,me],[opening_potion,_]),
+  not(is_open(Grave)),
   !.
 
 preconditions(cast_spell(sleep(Agent))):-
   has([agent,me],[sleep_potion,_]),
   actual_position(Pos),
   at(Agent,Pos),
+  Agent = [Type,Name],
+  Agent \= [agent,me],
+  (Type = agent ; Type = dragon),
   not(is_unconscious(Agent)),
   !.
 
@@ -171,7 +165,10 @@ preconditions(cast_spell(sleep(Agent))):-
 %
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-explore(Pos):-
+explore_cell(Pos):-
  	retractall(unexplored(Pos)).
+
+is_open(Grave):-
+	property(Grave, open, true).
  	
  	
