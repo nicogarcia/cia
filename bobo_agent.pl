@@ -6,52 +6,59 @@
 
 :- dynamic turn/1, seen_entity/3, hostel/2, grave/2.
 
-:- dynamic im_going_to_hostel/0.
-
 :- 	consult(ag_primitives),
 	consult(extras_for_agents),
 	consult(bobo_display),
 	consult(bobo_decisions),
-	consult(bobo_auxiliar).
+	consult(bobo_auxiliar),
+	consult(bobo_algorithms).
+	
+%==============================================================================
+%	Global Configuration
+%==============================================================================
 
-% Configuration
+:- dynamic print_frontier_enabled/0.
+
 mapWidth(25).
 mapHeight(30).
 margin(20).
 
-print_frontier_enabled(false).
-print_neighbour_enabled(false).
+print_frontier_enabled.
 
 
-% Game loop
+%==============================================================================
+%	Game Loop
+%==============================================================================
+
 run:-
 	%remove all past fact about what i have
 	retract_my_own_perceptions,
+	
 	% Get perceptions
-    get_percept(Perc),
+	get_percept(Perc),
 
 	% Update agent's internal state
-    update_state(Perc),
+	update_state(Perc),
     
-	% Display agent internal state
-    display_agent_status(Perc),
-
-    % To debug
-    display_agent_simulated_stamina,
+	% Display agent agent status
+	display_agent_status,
     	
-	% Display current state
-	display_fixed_entities,
+	% Display internal state
+	display_perceptions,
 	    
-    % Choose action to take
-    decide_action(Action),
+	% Choose action to take
+	decide_action(Action),
+	
+	% Print decided action
+	show_action_taken(Action),
 
 	% Actually take the action
-    do_action(Action),
+	do_action(Action),
     
-    show_turn_decoration,    
+	show_turn_decoration,    
 
 	% Loop
-    run.
+	run.
 
 %==============================================================================
 %  Internal State Update
@@ -70,33 +77,36 @@ update_state(Perceptions):-
 %==============================================================================
   
 save_perceptions(Perceptions):-
-	
-	show_perception_analysis_title,
-	
+		
 	% Analyse and store enviroment information
 	analyse_perception(Perceptions),
 
 	% Delete not existing objects from beliefs
-	delete_missing_seen_entities(Perceptions).
+	delete_missing_seen_entities(Perceptions),
+	
+	% Update unexplored borders
+	actual_direction(Dir),
+	actual_position(Pos),
+	update_borders(Pos, Dir).
 
 %==============================================================================
 %	Delete Missing Seen Entities
-%	Removes beliefs that are not true anymorer due to environment changes.
+%	Removes beliefs that are not true anymore due to environment changes.
 %==============================================================================
 
 delete_missing_seen_entities(Perceptions):-	
 	% Forget seen objects really not existing in viewing position 		
 	forall(
-       (
-           member(land(IterationPos,_), Perceptions),
-           seen_entity(EntitySeen, IterationPos, _),
-           not(member(at(EntitySeen, IterationPos),Perceptions))
-        ),
-        (
-        	show_missing_entity(EntitySeen),
-        	retractall(seen_entity(EntitySeen, IterationPos, _)),
-        	retractall(at(EntitySeen,IterationPos))
-        )
+		(
+	           member(land(IterationPos,_), Perceptions),
+	           seen_entity(EntitySeen, IterationPos, _),
+	           not(member(at(EntitySeen, IterationPos),Perceptions))
+	        ),
+	        (
+	        	show_missing_entity(EntitySeen),
+	        	retractall(seen_entity(EntitySeen, IterationPos, _)),
+	        	retractall(at(EntitySeen,IterationPos))
+	        )
 	).
 	
 %==============================================================================
@@ -149,6 +159,8 @@ analyse_perception([Perception|ReminderPerc]):-
 	retractall(seen_entity(Entity, _, _)),
 	retractall(at(Entity,_)),
 	retractall(has(_,Entity)),
+	% Remove has of an entity when i see it
+	retractall(has(Entity,_)),
 	
 	% Update location and turn of just entity discovery
 	assert(seen_entity(Entity, Pos, T)),
@@ -209,11 +221,11 @@ analyse_perception([Perception|ReminderPerc]):-
 	analyse_perception(ReminderPerc).
 
 analyse_perception([Perception|ReminderPerc]):-
-	Perception = land(Pos,_),
+	Perception = land(Pos, Land),
 	
 	% Not seen before
-	not(land(Pos,_)),
-	assert(land(Pos,_)),
+	not(land(Pos, _)),
+	assert(land(Pos, Land)),
 	explore_cell(Pos),
 	
 	% Call recursively with the tail of the list
@@ -235,6 +247,10 @@ retract_my_own_perceptions:-
 
 % -----------------------------------------------------------------
 
+%==============================================================================
+%	Game initialization
+%==============================================================================
+
 :- dynamic ag_name/1.
 
 start_ag:- 
@@ -253,6 +269,7 @@ start_ag:-
 	write(Status), nl, nl,
 	Status = connected,
 	assert(ag_name(AgName)),
+    	show_turn_decoration,
 	run.
 
 s:- start_ag.
@@ -270,10 +287,3 @@ start_ag_instance(InstanceID):-
     run.
 
 si(InstanceID):- start_ag_instance(InstanceID).
-
-
-% To debug
-display_agent_simulated_stamina:-
-	write('Simulated Stamina: '), 
-	actual_stamina(Stamina),
-	writeln(Stamina).
